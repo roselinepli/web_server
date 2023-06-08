@@ -8,9 +8,9 @@
 Steps 1, 2 and 6 are the same from one application to another, so the Python library has a module called BaseHTTPServer
 that does those for us. We just have to take care of steps 3-5.
 """
-import BaseHTTPServer
+from http.server import HTTPServer, BaseHTTPRequestHandler
 
-class RequestHandler(BaseHTTPServer.BaseHTTPRequestHandler):
+class RequestHandler(BaseHTTPRequestHandler):
     '''Handle HTTP requests by returning a fixed 'page'.'''
 
     # Page to send back.
@@ -31,5 +31,5 @@ class RequestHandler(BaseHTTPServer.BaseHTTPRequestHandler):
 
 if __name__ == '__main__':
     serverAddress = ('', 8080)
-    server = BaseHTTPServer.HTTPServer(serverAddress, RequestHandler)
-    server.server_forever()
+    server = HTTPServer(serverAddress, RequestHandler)
+    server.serve_forever()
