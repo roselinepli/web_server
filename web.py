@@ -1,7 +1,29 @@
 from http.server import HTTPServer, BaseHTTPRequestHandler
 import os
 
-class case_no_file(object):
+class base_case(object):
+    '''Parent for case handlers.'''
+
+    def handle_file(self, handler, full_path):
+        try:
+            with open(full_path, 'rb') as reader:
+                content = reader.read()
+            handler.send_content(content)
+        except IOError as msg:
+            msg = "'{0}' cannot be read: {1}".format(full_path, msg)
+            handler.handle_error(msg)
+
+    def index_path(self, handler):
+        return os.path.join(handler.full_path, 'index.html')
+
+    def test(self, handler):
+        assert False, 'Not implemented.'
+
+    def act(self, handler):
+        assert False, 'Not implemented.'
+
+
+class case_no_file(base_case):
     '''File or directory does not exist.'''
 
     def test(self, handler):
@@ -10,7 +32,7 @@ class case_no_file(object):
     def act(self, handler):
         raise ServerException("'{0}' not found".format(handler.path))
 
-class case_existing_file(object):
+class case_existing_file(base_case):
     '''File exists.'''
 
     def test(self, handler):
@@ -19,7 +41,7 @@ class case_existing_file(object):
     def act(self, handler):
         handler.handle_file(handler.full_path)
 
-class case_directory_index_file(object):
+class case_directory_index_file(base_case):
     '''Serve index.html page for a directory.'''
     def index_path(self, handler):
         return os.path.join(handler.full_path, 'index.html')
@@ -31,7 +53,7 @@ class case_directory_index_file(object):
     def act(self, handler):
         handler.handle_file(self.index_path(handler))
 
-class case_always_fail(object):
+class case_always_fail(base_case):
     '''Base case if nothing else worked.'''
     def test(self, handler):
         return True
@@ -39,7 +61,7 @@ class case_always_fail(object):
     def act(self, handler):
         raise ServerException("Unknown object '{0}'".format(handler.path))
 
-class case_directory_no_index_file(object):
+class case_directory_no_index_file(base_case):
     '''Serve listing for a directory without an index.html page.'''
 
     def index_path(self, handler):
@@ -52,16 +74,45 @@ class case_directory_no_index_file(object):
     def act(self, handler):
         handler.list_dir(handler.full_path)
 
+# CGI Protocol
+class case_cgi_file(base_case):
+    """Something runnable."""
+
+    def test(self, handler):
+        return os.path.isfile(handler.full_path) and handler.full_path.endswith('.py')
+
+    def act(self, handler):
+        handler.run_cgi(handler.full_path)
+
+    def run_cgi(self, full_path):
+        cmd = "python " + full_path
+        child_stdin, child_stdout = os.popen2(cmd)
+        child_stdin.close()
+        data = child_stdout.read()
+        child_stdout.close()
+        self.send_content(data)
+
 # Serving Static Pages
-class MyHandler(BaseHTTPRequestHandler):
+class RequestHandler(BaseHTTPRequestHandler):
     '''
     If the requested path maps to a file, that file is served.
     If anything goes wrong, an error page is constructed.
     '''
     Cases = [case_no_file(),
+             case_cgi_file(),
              case_existing_file(),
              case_directory_index_file(),
              case_always_fail()]
+
+    # How to display an error.
+    Error_Page = """\
+        <html>
+        <body>
+        <h1>Error accessing {path}</h1>
+        <p>{msg}</p>
+        </body>
+        </html>
+        """
 
     Page = '''\
 <html>
@@ -77,6 +128,8 @@ class MyHandler(BaseHTTPRequestHandler):
 </body>
 </html>
 '''
+    # Classify and handle request.
+
     def do_GET(self):
         # self.send_response(200)
         # self.send_header('Content-type', 'text/html')
@@ -99,23 +152,14 @@ class MyHandler(BaseHTTPRequestHandler):
         except Exception as msg:
             self.handle_error(msg)
 
-    def handle_file(self, full_path):
-        try:
-            with open(full_path, 'rb') as reader:
-                content = reader.read()
-            self.send_content(content)
-        except IOError as msg:
-            msg = "'{0}' cannot be read: {1}".format(self.path, msg)
-            self.handle_error(msg)
-
-    Error_Page = """\
-        <html>
-        <body>
-        <h1>Error accessing {path}</h1>
-        <p>{msg}</p>
-        </body>
-        </html>
-        """
+    # def handle_file(self, full_path):
+    #     try:
+    #         with open(full_path, 'rb') as reader:
+    #             content = reader.read()
+    #         self.send_content(content)
+    #     except IOError as msg:
+    #         msg = "'{0}' cannot be read: {1}".format(self.path, msg)
+    #         self.handle_error(msg)
 
     # Handle unkown objects.
     def handle_error(self, msg):
@@ -170,5 +214,5 @@ class MyHandler(BaseHTTPRequestHandler):
             msg = "'{0}' cannot be listed: {1}".format(self.path, msg)
             self.handle_error(msg)
 
-server = HTTPServer(('localhost', 8080), MyHandler)
+server = HTTPServer(('localhost', 8080), RequestHandler)
 server.serve_forever()
