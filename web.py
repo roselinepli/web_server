@@ -74,7 +74,6 @@ class case_directory_no_index_file(base_case):
     def act(self, handler):
         handler.list_dir(handler.full_path)
 
-# CGI Protocol
 class case_cgi_file(base_case):
     """Something runnable."""
 
@@ -92,7 +91,7 @@ class case_cgi_file(base_case):
         child_stdout.close()
         self.send_content(data)
 
-# Serving Static Pages
+
 class RequestHandler(BaseHTTPRequestHandler):
     '''
     If the requested path maps to a file, that file is served.
